@@ -1,0 +1,477 @@
+import React, { useState, useMemo } from 'react';
+import { Wind, Sun, Droplets, CloudFog, Snowflake, ArrowRight, RefreshCcw, Circle, Activity, Leaf, BarChart2 } from 'lucide-react';
+
+// --- 1. 核心题库 (深度优化版：五脏-五行对应) ---
+const questions = [
+  // === 木 (Wood) - 肝/风 ===
+  // 重点：疏泄失职、情志不畅、开窍于目、主筋
+  { id: 1, text: "【情志】您是否容易发怒或情绪波动大，常感到精神紧张、压抑？", element: "wood" },
+  { id: 2, text: "【身体】您是否经常感到两肋（肋骨下方）胀痛，或者胸闷不舒？", element: "wood" },
+  { id: 3, text: "【官窍】您是否经常感到眼睛干涩、迎风流泪，或者视力容易疲劳？", element: "wood" },
+  { id: 4, text: "【习惯】您是否无意识地经常叹气（中医称“太息”），叹出来才觉得舒服？", element: "wood" },
+
+  // === 火 (Fire) - 心/热 ===
+  // 重点：主血脉、藏神、开窍于舌、在志为喜(焦)
+  { id: 5, text: "【感觉】您是否经常感到心慌、心跳剧烈（心悸），尤其在劳累或受惊后？", element: "fire" },
+  { id: 6, text: "【睡眠】您的睡眠质量是否较差，表现为入睡难，或者整夜多梦、易惊醒？", element: "fire" },
+  { id: 7, text: "【官窍】您是否容易反复出现口腔溃疡，或者早起时感觉口苦、舌尖红？", element: "fire" },
+  { id: 8, text: "【面色】您的面色是否经常潮红，或者手心、脚心容易发热心烦？", element: "fire" },
+
+  // === 土 (Earth) - 脾/湿 ===
+  // 重点：主运化、主肌肉四肢、在志为思、开窍于口
+  { id: 9, text: "【身体】您是否经常感到头重如裹，或者四肢沉重、懒得动弹？", element: "earth" },
+  { id: 10, text: "【消化】您是否稍微多吃一点就容易腹胀，或者长期胃口不佳、食欲不振？", element: "earth" },
+  { id: 11, text: "【排泄】您的大便是否经常不成形（溏稀），或者容易粘在马桶上冲不干净？", element: "earth" },
+  { id: 12, text: "【情志】您是否容易思虑过度，脑子里总是想事情停不下来，导致精神疲惫？", element: "earth" },
+
+  // === 金 (Metal) - 肺/燥 ===
+  // 重点：主气司呼吸、主皮毛、开窍于鼻、在志为悲
+  { id: 13, text: "【皮毛】您的皮肤是否常年干燥、粗糙，换季时容易瘙痒或脱屑？", element: "metal" },
+  { id: 14, text: "【官窍】您的鼻腔或咽喉是否经常感到干燥、发痒，或者嗅觉一度不灵敏？", element: "metal" },
+  { id: 15, text: "【呼吸】您是否容易干咳无痰，或者说话多了就觉得气短、声音低微？", element: "metal" },
+  { id: 16, text: "【情志】您是否容易产生莫名的悲伤感、凄凉感，看到落叶秋风易伤感？", element: "metal" },
+
+  // === 水 (Water) - 肾/寒 ===
+  // 重点：藏精、主水、主骨生髓、开窍于耳、在志为恐
+  { id: 17, text: "【温度】您是否比周围人更怕冷，手脚常年冰凉，即使夏天也不敢贪凉？", element: "water" },
+  { id: 18, text: "【骨骼】您是否经常感到腰膝酸软无力，或者久站后脚后跟疼痛？", element: "water" },
+  { id: 19, text: "【排泄】您是否有夜间尿频（起夜多）的现象，或者早起眼睑/下肢容易水肿？", element: "water" },
+  { id: 20, text: "【情志】您是否胆子较小，容易感到恐惧不安，或者容易被突发的声音吓一跳？", element: "water" }
+];
+
+// 选项权重
+const options = [
+  { label: "没有 (从不)", score: 0, color: "hover:bg-gray-50 border-gray-200" },
+  { label: "偶尔 (很少)", score: 2, color: "hover:bg-blue-50 border-blue-200 text-blue-700" },
+  { label: "有时 (间断)", score: 3, color: "hover:bg-yellow-50 border-yellow-200 text-yellow-700" },
+  { label: "经常 (总是)", score: 5, color: "hover:bg-red-50 border-red-200 text-red-700" }
+];
+
+// --- 2. 12个“季节：气”运气画像库 ---
+const profiles = {
+  // === 春季 ===
+  yu_shui: {
+    title: "春季：雨水",
+    subtitle: "风寒束表 | 阳气初萌",
+    desc: "您的体质「木」气虽生，但「水/寒」气仍重。正如早春乍暖还寒，体内阳气升发无力，易感风寒，手脚不温。",
+    incense: "降真香 + 艾叶",
+    tip: "宜温阳生发。艾叶温经散寒，降真香通天达地，助阳气破寒而出。",
+    color: "from-teal-700 to-cyan-600"
+  },
+  chun_fen: {
+    title: "春季：春分",
+    subtitle: "木火通明 | 阳气勃发",
+    desc: "您的体质「木」气极旺，兼具「火」势。正如春分昼夜平分，阳气升发迅猛。您思维敏捷但易冲动，肝火易旺，气机上冲。",
+    incense: "梅花香 + 沉香",
+    tip: "宜疏肝敛阳。梅花顺应生发，沉香纳气归元，防阳气过亢。",
+    color: "from-teal-600 to-emerald-400"
+  },
+  gu_yu: {
+    title: "春季：谷雨",
+    subtitle: "木克土虚 | 肝郁脾弱",
+    desc: "「木」气偏盛克制「土」气。肝气郁结导致脾胃运化受阻，常表现为情绪不佳伴随消化不良，腹胀纳差。",
+    incense: "香附 + 苍术",
+    tip: "宜疏肝健脾。香附解郁，苍术燥湿醒脾，调和肝脾不和。",
+    color: "from-green-600 to-yellow-400"
+  },
+  
+  // === 夏季 ===
+  xiao_man: {
+    title: "夏季：小满",
+    subtitle: "火燥伤金 | 阳气渐满",
+    desc: "「火」气初盛，开始灼烧「金」气。热邪伤肺，容易出现干咳、皮肤干热、咽喉肿痛，津液匮乏，正如小满之阳气充盈。",
+    incense: "蜜炙檀香 + 百合",
+    tip: "宜清润生津。蜜炙香药减其燥性，百合润肺，金水相生。",
+    color: "from-orange-600 to-amber-400"
+  },
+  xia_zhi: {
+    title: "夏季：夏至",
+    subtitle: "心肝火旺 | 烈日炎炎",
+    desc: "「火」势极盛，且有「木」助燃。心神不宁，急躁易怒，睡眠极差，口苦咽干，体内如烈火烹油。",
+    incense: "檀香 + 栀子",
+    tip: "宜清心泻火。檀香理气宽胸，栀子清三焦之火，安神定志。",
+    color: "from-red-600 to-orange-500"
+  },
+  da_shu: {
+    title: "夏季：大暑",
+    subtitle: "湿热交蒸 | 脾胃困顿",
+    desc: "「火」热与「土」湿并重。正如桑拿天，体内湿热胶着，既心烦口渴，又觉身体沉重油腻，大便粘滞。",
+    incense: "藿香 + 佩兰 + 龙脑",
+    tip: "宜芳香化浊。藿香佩兰强力去湿，龙脑开窍清热，清利头目。",
+    color: "from-red-500 to-yellow-500"
+  },
+
+  // === 秋季 ===
+  chu_shu: {
+    title: "秋季：处暑",
+    subtitle: "土生金旺 | 暑气止歇",
+    desc: "「土」气生养「金」气，湿气渐退，燥气初显。体质较为平和但偏向干燥，易感凉燥，皮肤紧绷。",
+    incense: "鹅梨帐中香",
+    tip: "宜润燥养颜。鹅梨汁润肺，沉檀木理气，温润而不燥。",
+    color: "from-yellow-600 to-stone-400"
+  },
+  qiu_fen: {
+    title: "秋季：秋分",
+    subtitle: "金木交战 | 肃杀之气",
+    desc: "「金」气强行克制「木」气。常感压抑、胸闷，想发火发不出，容易出现过敏性体质或神经性疼痛。",
+    incense: "安息香 + 佛手",
+    tip: "宜安神理气。安息香定惊，佛手疏肝，调和金木之战。",
+    color: "from-slate-500 to-teal-700"
+  },
+  shuang_jiang: {
+    title: "秋季：霜降",
+    subtitle: "金水相生 | 寒凉肃杀",
+    desc: "「金」凉与「水」寒叠加。体质偏寒凉，性格内敛冷峻，易感风寒，呼吸系统与肾脏功能偏弱。",
+    incense: "苏合香",
+    tip: "宜温通经络。苏合香气烈走窜，能破除体内肃杀阴霾之气。",
+    color: "from-stone-500 to-blue-600"
+  },
+
+  // === 冬季 ===
+  xiao_xue: {
+    title: "冬季：小雪",
+    subtitle: "寒湿凝滞 | 脾肾两虚",
+    desc: "「土」湿遇上「水」寒。体内不仅湿气重，且寒气凝滞，运化极慢，易水肿、腹泻、腰膝冷痛。",
+    incense: "肉桂 + 苍术",
+    tip: "宜温阳燥湿。肉桂补火生土，苍术燥湿，如冬日暖阳照耀湿土。",
+    color: "from-yellow-700 to-blue-800"
+  },
+  dong_zhi: {
+    title: "冬季：冬至",
+    subtitle: "水火不济 | 上热下寒",
+    desc: "「水」盛于下而「火」浮于上。典型表现为双脚冰凉，但脸上长痘、口腔溃疡，实为真寒假热。",
+    incense: "降真香",
+    tip: "宜引火归元。降真香能将上浮的虚火引回下焦丹田，调和水火。",
+    color: "from-blue-700 to-red-900"
+  },
+  da_han: {
+    title: "冬季：大寒",
+    subtitle: "水寒木冻 | 生机潜藏",
+    desc: "「水」气极盛，寒气封藏，使得「木」气无法萌发。手脚冰冷，关节僵硬，缺乏活力，心情易低落。",
+    incense: "沉香 + 麝香",
+    tip: "宜透关开窍。麝香极温，能破冰解冻，沉香纳气，唤醒深层生机。",
+    color: "from-blue-800 to-indigo-900"
+  }
+};
+
+// --- 3. 组件部分 ---
+
+export default function SolarTermConstitution() {
+  const [screen, setScreen] = useState('start');
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [scores, setScores] = useState({ wood: 0, fire: 0, earth: 0, metal: 0, water: 0 });
+  const [resultKey, setResultKey] = useState(null);
+
+  const handleAnswer = (score) => {
+    const element = questions[currentIdx].element;
+    const newScores = { ...scores, [element]: scores[element] + score };
+    setScores(newScores);
+
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(currentIdx + 1);
+    } else {
+      calculateResult(newScores);
+    }
+  };
+
+  const calculateResult = (finalScores) => {
+    const sorted = Object.entries(finalScores).sort((a, b) => b[1] - a[1]);
+    const primary = sorted[0][0]; 
+    const secondary = sorted[1][0]; 
+    
+    let key = "chu_shu"; 
+
+    if (primary === 'wood') {
+      if (secondary === 'fire') key = 'chun_fen'; 
+      else if (secondary === 'earth') key = 'gu_yu'; 
+      else key = 'yu_shui'; 
+    } 
+    else if (primary === 'fire') {
+      if (secondary === 'earth') key = 'da_shu'; 
+      else if (secondary === 'wood') key = 'xia_zhi'; 
+      else key = 'xiao_man'; 
+    } 
+    else if (primary === 'earth') {
+      if (secondary === 'water') key = 'xiao_xue'; 
+      else if (secondary === 'wood') key = 'gu_yu'; 
+      else if (secondary === 'fire') key = 'da_shu'; 
+      else key = 'chu_shu'; 
+    } 
+    else if (primary === 'metal') {
+      if (secondary === 'water') key = 'shuang_jiang'; 
+      else if (secondary === 'wood') key = 'qiu_fen'; 
+      else if (secondary === 'fire') key = 'xiao_man'; 
+      else key = 'chu_shu'; 
+    } 
+    else if (primary === 'water') {
+      if (secondary === 'fire') key = 'dong_zhi'; 
+      else if (secondary === 'wood') key = 'da_han'; 
+      else if (secondary === 'earth') key = 'xiao_xue'; 
+      else key = 'shuang_jiang'; 
+    }
+
+    setResultKey(key);
+    setScreen('result');
+  };
+
+  const restart = () => {
+    setScores({ wood: 0, fire: 0, earth: 0, metal: 0, water: 0 });
+    setCurrentIdx(0);
+    setScreen('start');
+  };
+
+  // --- 美化后的五行可视化组件 ---
+  const FiveElementChart = ({ data, primaryElement }) => {
+    const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
+    const maxScore = 20; // 单项满分
+    const radius = 80;
+    const circumference = 2 * Math.PI * radius;
+    
+    // 中文映射
+    const labels = { wood: '木', fire: '火', earth: '土', metal: '金', water: '水' };
+    const labelCN = { wood: '肝木', fire: '心火', earth: '脾土', metal: '肺金', water: '肾水' };
+    
+    // 颜色配置
+    const colors = {
+      wood: { stroke: '#10b981', bg: 'bg-emerald-500', text: 'text-emerald-700', light: 'bg-emerald-100' },
+      fire: { stroke: '#ef4444', bg: 'bg-red-500', text: 'text-red-700', light: 'bg-red-100' },
+      earth: { stroke: '#eab308', bg: 'bg-yellow-500', text: 'text-yellow-700', light: 'bg-yellow-100' },
+      metal: { stroke: '#94a3b8', bg: 'bg-slate-500', text: 'text-slate-600', light: 'bg-slate-100' },
+      water: { stroke: '#3b82f6', bg: 'bg-blue-500', text: 'text-blue-700', light: 'bg-blue-100' }
+    };
+
+    // 固定顺序（五行相生）
+    const elements = ['wood', 'fire', 'earth', 'metal', 'water'];
+    let accumulatedOffset = 0;
+
+    // 计算主导元素信息
+    const sortedElements = Object.entries(data).sort((a, b) => b[1] - a[1]);
+    const dominantKey = sortedElements[0][0];
+    const dominantColor = colors[dominantKey];
+
+    return (
+      <div className="flex flex-col items-center w-full">
+        {/* 上部分：圆环图 */}
+        <div className="relative w-64 h-64 mx-auto my-4 transform transition-all duration-700 hover:scale-105">
+          {/* 外圈装饰 */}
+          <div className="absolute inset-0 rounded-full border-4 border-stone-100 opacity-50"></div>
+          
+          <svg width="100%" height="100%" viewBox="0 0 200 200" className="rotate-[-90deg]">
+            {/* 背景环 */}
+            <circle cx="100" cy="100" r={radius} fill="transparent" stroke="#f5f5f4" strokeWidth="20" />
+            
+            {/* 数据环 */}
+            {elements.map((elm) => {
+              const value = data[elm];
+              const percent = value / total;
+              const dashArray = percent * circumference;
+              const gap = 4; // 间隙
+              const drawLength = Math.max(0, dashArray - gap); 
+              const offset = accumulatedOffset;
+              accumulatedOffset += dashArray;
+
+              if (value === 0) return null;
+
+              return (
+                <circle
+                  key={elm}
+                  cx="100"
+                  cy="100"
+                  r={radius}
+                  fill="transparent"
+                  stroke={colors[elm].stroke}
+                  strokeWidth="20"
+                  strokeDasharray={`${drawLength} ${circumference}`}
+                  strokeDashoffset={-offset}
+                  strokeLinecap="round"
+                  className="transition-all duration-1000 ease-out opacity-90 hover:opacity-100 hover:stroke-width-[24]"
+                />
+              );
+            })}
+          </svg>
+          
+          {/* 中心仪表盘 */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+             <span className="text-stone-400 text-[10px] uppercase tracking-widest font-bold mb-1">核心</span>
+             <div className={`w-16 h-16 rounded-full ${dominantColor.light} flex items-center justify-center shadow-inner mb-1`}>
+                <span className={`text-3xl font-serif font-bold ${dominantColor.text}`}>
+                  {labels[dominantKey]}
+                </span>
+             </div>
+             <span className={`text-xs font-bold ${dominantColor.text} px-2 py-0.5 rounded-full bg-white/80 shadow-sm`}>
+               {data[dominantKey]} 分
+             </span>
+          </div>
+        </div>
+
+        {/* 下部分：详细能量条 */}
+        <div className="w-full space-y-3 px-2">
+          {elements.map((elm) => {
+            const score = data[elm];
+            const percent = (score / maxScore) * 100;
+            const isDominant = elm === dominantKey;
+            
+            return (
+              <div key={elm} className="flex items-center gap-3 w-full">
+                {/* 标签 */}
+                <div className={`w-10 text-xs font-bold text-right ${isDominant ? colors[elm].text : 'text-stone-400'}`}>
+                  {labelCN[elm]}
+                </div>
+                
+                {/* 进度条 */}
+                <div className="flex-1 h-3 bg-stone-100 rounded-full overflow-hidden relative">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ease-out ${colors[elm].bg} ${isDominant ? 'shadow-md opacity-100' : 'opacity-70'}`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                
+                {/* 分数 */}
+                <div className="w-6 text-xs font-medium text-stone-500 text-left">
+                  {score}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // --- 页面渲染 ---
+
+  const renderStart = () => (
+    <div className="min-h-screen bg-[#f7f5f0] flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+      <div className="z-10 bg-white p-8 rounded-full shadow-xl mb-8 animate-pulse-slow">
+        <Leaf className="text-emerald-700" size={64} strokeWidth={1} />
+      </div>
+      <h1 className="z-10 text-4xl font-serif font-bold text-stone-800 mb-2">五运六气</h1>
+      <h2 className="z-10 text-lg font-serif text-stone-600 mb-10 tracking-[0.2em]">12节气运气测试</h2>
+      <p className="z-10 text-stone-500 max-w-xs mb-12 font-light leading-7">
+        天地之气，流转于十二节气。<br/>
+        测一测您的身体，<br/>
+        正处于哪种运气格局？
+      </p>
+      <button onClick={() => setScreen('quiz')} className="z-10 flex items-center gap-2 px-10 py-4 bg-stone-800 text-stone-100 rounded-full shadow-lg hover:scale-105 transition-transform">
+        <span>开启测试</span> <ArrowRight size={18} />
+      </button>
+      
+      {/* Bg Decoration */}
+      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-300 rounded-full blur-[100px]" />
+         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-orange-300 rounded-full blur-[100px]" />
+      </div>
+    </div>
+  );
+
+  const renderQuiz = () => {
+    const q = questions[currentIdx];
+    const progress = ((currentIdx + 1) / questions.length) * 100;
+    
+    return (
+      <div className="min-h-screen bg-[#f7f5f0] flex flex-col">
+        {/* Progress */}
+        <div className="h-1.5 w-full bg-stone-200">
+          <div className="h-full bg-stone-800 transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className="flex-1 p-6 flex flex-col max-w-md mx-auto w-full">
+           <div className="mt-8 mb-4 flex justify-between items-end">
+             <span className="text-stone-400 text-xs font-bold tracking-widest">QUESTION {currentIdx + 1}/{questions.length}</span>
+             <Activity size={16} className="text-stone-300" />
+           </div>
+
+           <h3 className="text-xl font-serif font-medium text-stone-800 leading-normal min-h-[5rem] mb-8">
+             {q.text}
+           </h3>
+
+           <div className="space-y-3 mt-auto mb-12">
+             {options.map((opt, i) => (
+               <button
+                 key={i}
+                 onClick={() => handleAnswer(opt.score)}
+                 className={`w-full p-4 rounded-xl border bg-white flex justify-between items-center group transition-all duration-200 ${opt.color} active:scale-[0.98]`}
+               >
+                 <span className="text-stone-700 font-medium group-hover:text-current">{opt.label}</span>
+                 <Circle size={18} className="text-stone-200 group-hover:text-current" />
+               </button>
+             ))}
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderResult = () => {
+    if (!resultKey) return null;
+    const data = profiles[resultKey];
+
+    return (
+      <div className="min-h-screen bg-[#f7f5f0] relative overflow-hidden">
+        {/* Dynamic Background Gradient */}
+        <div className={`absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b ${data.color} opacity-90 rounded-b-[40px] shadow-2xl z-0`} />
+
+        <div className="relative z-10 flex flex-col items-center p-6 max-w-md mx-auto">
+          {/* Header Card */}
+          <div className="mt-8 text-center text-white">
+            <div className="text-xs font-bold opacity-70 tracking-[0.3em] uppercase mb-2">您的体质节气</div>
+            <h1 className="text-4xl font-serif font-bold mb-2 shadow-sm">{data.title}</h1>
+            <div className="inline-block px-3 py-1 border border-white/30 rounded-full text-sm font-medium backdrop-blur-sm bg-white/10">
+              {data.subtitle}
+            </div>
+          </div>
+
+          {/* Visualization Chart Card */}
+          <div className="mt-8 w-full bg-white rounded-3xl shadow-xl p-6 mb-6">
+            <h3 className="text-center text-stone-500 text-xs font-bold tracking-widest mb-6 border-b border-stone-100 pb-2">五行能量分布</h3>
+            <FiveElementChart data={scores} />
+          </div>
+
+          {/* Analysis Card */}
+          <div className="w-full bg-white/60 backdrop-blur-md border border-white rounded-2xl p-6 mb-4 shadow-sm">
+            <h3 className="font-bold text-stone-800 mb-2 flex items-center gap-2">
+              <Activity size={16} /> 体质解析
+            </h3>
+            <p className="text-sm text-stone-600 leading-relaxed text-justify">
+              {data.desc}
+            </p>
+          </div>
+
+          {/* Recommendation Card */}
+          <div className="w-full bg-stone-800 text-stone-100 rounded-2xl p-6 shadow-lg mb-8">
+            <h3 className="font-bold text-stone-300 mb-3 text-xs tracking-widest uppercase flex items-center gap-2">
+              <Wind size={14} /> 运气香方推荐
+            </h3>
+            <div className="text-xl font-serif font-bold mb-2 text-white border-b border-white/10 pb-2">
+              {data.incense}
+            </div>
+            <p className="text-sm text-stone-400 leading-relaxed mt-2">
+              {data.tip}
+            </p>
+          </div>
+
+          <button onClick={restart} className="flex items-center gap-2 text-stone-500 font-bold text-sm hover:text-stone-800 transition-colors pb-8">
+            <RefreshCcw size={16} /> 再测一次
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <style>{`
+        @keyframes pulse-slow {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 3s infinite ease-in-out;
+        }
+      `}</style>
+      {screen === 'start' && renderStart()}
+      {screen === 'quiz' && renderQuiz()}
+      {screen === 'result' && renderResult()}
+    </>
+  );
+}
